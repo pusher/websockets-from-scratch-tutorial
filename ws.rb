@@ -1,31 +1,7 @@
-# require 'sinatra'
 require 'digest/sha1'
 require 'base64'
 # require 'json'
 
-# get '/' do
-# 	"Hello world"
-# end
-
-# get '/ws' do 
-# 	# puts request.env
-# 	websocket_key = request.env["HTTP_SEC_WEBSOCKET_KEY"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-	
-# 	# puts websocket_key
-
-# 	sha = Digest::SHA1.digest websocket_key
-# 	base = Base64.encode64 sha
-# 	# puts base
-# 	status 101
-# 	headers \
-# 		"Upgrade" => "websocket",
-# 		"Connection" => "Upgrade",
-# 		"Sec-WebSocket-Accept" => base
-
-# 	puts response.inspect
-# 	# {success:200}.to_json
-# 	nil
-# end
 require 'socket'
 
 server = TCPServer.new 'localhost', 4567
@@ -59,44 +35,28 @@ loop do
 			"Sec-WebSocket-Accept: #{base}\r\n"
 
 
-		wsdata = socket.readpartial(1024)
+		loop do
 
-		ws_bytes = wsdata.each_byte.to_a
+			fin, pre_length = socket.read(2).bytes
 
-		puts ws_bytes
+			second_byte_mod = pre_length - 128
 
-		fin = ws_bytes[0]
+			if second_byte_mod <= 125
+				length = second_byte_mod
+			elsif second_byte_mod == 126
+				length = socket.read(2).unpack("n")[0]
+			elsif second_byte_mod == 127
+				length = socket.read(8).unpack("n")[0]
+			end
 
-		second_byte_mod = ws_bytes[1] - 128
+			keys = socket.read(4).bytes
+			content = socket.read(length).bytes
 
-		puts second_byte_mod
-
-		if 0 <= second_byte_mod && second_byte_mod <= second_byte_mod
-			length = ws_bytes[1]
-			keys = ws_bytes[2..5]
-			content = ws_bytes[6..-1]
+			decoded = content.each_with_index.map { |byte, index| byte ^ keys[index % 4] }
 
 			puts length
-			puts keys
-			puts content
-
-		elsif second_byte_mod == 126
-			length = ws_bytes[2..3]
-			keys = ws_bytes[4..7]
-			content = ws_bytes[8..-1]
-		elsif second_byte_mod == 127
-			length = ws_bytes[2..9]
-			keys = ws_bytes[10..13]
-			content = ws_bytes[13..-1]
+			puts decoded.pack("c*")
 		end
-			
-		decoded = []
-
-		content.each_with_index do |byte, index|
-			decoded[index] = byte ^ keys[index % 4]
-		end
-
-		puts decoded.pack("c*")
 			
 
 			# socket.print "\r\n"
