@@ -1,6 +1,7 @@
 class WebsocketConnection
 
 	WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+	OPCODE_TEXT = 0x01
 
 	attr_reader :socket, :path
 
@@ -31,12 +32,12 @@ class WebsocketConnection
 
 				second_byte_mod = pre_length - 128
 
-				if second_byte_mod <= 125
-					length = second_byte_mod
+				length = if second_byte_mod <= 125
+					second_byte_mod
 				elsif second_byte_mod == 126
-					length = socket.read(2).unpack("n")[0]
-				elsif second_byte_mod == 127
-					length = socket.read(8).unpack("n")[0] # this is wrong
+					socket.read(2).unpack("n")[0]
+				else
+					socket.read(8).unpack("n")[0] # this is wrong
 				end
 
 				keys = socket.read(4).bytes
@@ -50,11 +51,11 @@ class WebsocketConnection
 	end
 
 	def send(message)
-		bytes = [129]
+		bytes = [0x80 | OPCODE_TEXT]
 		size = message.bytesize
 
 		if size <= 125
-			bytes += [size]
+			bytes << size
 		elsif size < 2**16
 			bytes += ([126] + [size].pack("n").bytes)
 		else
@@ -63,7 +64,7 @@ class WebsocketConnection
 
 		bytes += message.bytes
 		send_data = bytes.pack("C*")
-		socket.write(send_data)
+		socket << send_data
 	end
 
 	private
@@ -73,7 +74,7 @@ class WebsocketConnection
 	end
 
 	def send_handshake_response(ws_accept)
-		socket.print "HTTP/1.1 101 Switching Protocols\r\n" +
+		socket << "HTTP/1.1 101 Switching Protocols\r\n" +
 			"Upgrade: websocket\r\n" +
 			"Connection: Upgrade\r\n" +
 			"Sec-WebSocket-Accept: #{ws_accept}\r\n"		

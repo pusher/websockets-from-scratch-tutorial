@@ -1,6 +1,6 @@
 require_relative 'websocket_server'
 
-server = WebsocketServer.new port: 4567, path: '/ws'
+server = WebsocketServer.new
 
 server.connect do |connection|
 
