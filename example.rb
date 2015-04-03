@@ -10,6 +10,6 @@ server.connect do |connection|
 
 	sleep 5
 
-	connection.send("yo!")
+	connection.send("yolo!")
 
 end
