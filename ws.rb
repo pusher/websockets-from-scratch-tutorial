@@ -12,20 +12,20 @@ loop do
 
 	request = socket.gets
 
+	header = ""
+
+	while (line = socket.gets) != "\r\n"
+		header += line
+	end
+
 	STDERR.puts request
 
 	if request =~ /GET \/ws/
-		data = socket.readpartial(2048).split("\r\n\r\n")
-		puts request
 
-		# puts socket.methods
-		
-		data[0] =~ /Sec-WebSocket-Key: (.*)\r\n/
+		header =~ /Sec-WebSocket-Key: (.*)\r\n/
 
-		# puts data[0].inspect
-		# puts $1
 		websocket_key = $1 + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-		# puts websocket_key
+
 		sha = Digest::SHA1.digest websocket_key
 		base = Base64.encode64 sha
 
@@ -74,31 +74,13 @@ loop do
 		else
 			bytes += ([127] + [size].pack("n").bytes) # also wrong
 		end
-		
+
 		bytes += payload.bytes
 		send_data = bytes.pack("C*")
 
 		socket.write(send_data)
 
 
-	elsif request =~ /GET \//
-		response = "Hello World!\n"
-
-		socket.print "HTTP/1.1 200 OK\r\n" +
-			"Content-Type: text/plain\r\n" +
-			"Content-Length: #{response.bytesize}\r\n" +
-			"Connection: close\r\n"
-
-			socket.print "\r\n"
-
-			socket.print response
-
-			socket.close
-	else
-		puts 'yolo'
-		# data = socket.readpartial(2048)
-		data = socket.recv(100)
-		puts data
 	end
 
 end
