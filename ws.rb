@@ -1,7 +1,7 @@
 require 'digest/sha1'
 require 'base64'
 # require 'json'
-
+require 'stringio'
 require 'socket'
 
 server = TCPServer.new 'localhost', 4567
@@ -34,33 +34,52 @@ loop do
 			"Connection: Upgrade\r\n" +
 			"Sec-WebSocket-Accept: #{base}\r\n"
 
+		Thread.start(socket) do |socket|
+			loop do
 
-		loop do
+				fin, pre_length = socket.read(2).bytes
 
-			fin, pre_length = socket.read(2).bytes
+				second_byte_mod = pre_length - 128
 
-			second_byte_mod = pre_length - 128
+				if second_byte_mod <= 125
+					length = second_byte_mod
+				elsif second_byte_mod == 126
+					length = socket.read(2).unpack("n")[0]
+				elsif second_byte_mod == 127
+					length = socket.read(8).unpack("n")[0] # this is wrong
+				end
 
-			if second_byte_mod <= 125
-				length = second_byte_mod
-			elsif second_byte_mod == 126
-				length = socket.read(2).unpack("n")[0]
-			elsif second_byte_mod == 127
-				length = socket.read(8).unpack("n")[0]
+				keys = socket.read(4).bytes
+				content = socket.read(length).bytes
+
+				decoded = content.each_with_index.map { |byte, index| byte ^ keys[index % 4] }.pack("c*")
+
+				puts "Length of message: #{length}"
+				puts "Content of message: #{decoded}"
 			end
-
-			keys = socket.read(4).bytes
-			content = socket.read(length).bytes
-
-			decoded = content.each_with_index.map { |byte, index| byte ^ keys[index % 4] }
-
-			puts length
-			puts decoded.pack("c*")
 		end
 			
+		sleep 5
 
-			# socket.print "\r\n"
-		# socket.close
+		payload = ("a" * 1000)
+
+		bytes = [129]
+
+		size = payload.bytesize
+
+		if size <= 125
+			bytes += [size]
+		elsif size < 2**16
+			bytes += ([126] + [size].pack("n").bytes)
+		else
+			bytes += ([127] + [size].pack("n").bytes) # also wrong
+		end
+		
+		bytes += payload.bytes
+		send_data = bytes.pack("C*")
+
+		socket.write(send_data)
+
 
 	elsif request =~ /GET \//
 		response = "Hello World!\n"
