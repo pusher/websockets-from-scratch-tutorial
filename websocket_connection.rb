@@ -11,19 +11,17 @@ class WebsocketConnection
   end
 
   def begin_handshake 
-      request = socket.gets
-      STDERR.puts request
-
-      if request =~ /GET #{path}/
-        header = get_header
-        send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
-        ws_accept = create_websocket_accept($1)
-        send_handshake_response(ws_accept)
-        @handshake_sent = true
-      end
+    request = socket.gets
+    if request =~ /GET #{path}/
+      header = get_header
+      send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
+      ws_accept = create_websocket_accept($1)
+      send_handshake_response(ws_accept)
+      @handshake_sent = true
+    end
   end
 
-  def listen
+  def listen(&block)
     Thread.new do
       loop do
 
@@ -66,8 +64,8 @@ class WebsocketConnection
               end 
 
     bytes += message.bytes
-    send_data = bytes.pack("C*")
-    socket << send_data
+    data = bytes.pack("C*")
+    socket << data
   end
 
   private
@@ -77,24 +75,24 @@ class WebsocketConnection
   end
 
   def send_400
-    socket.print "HTTP/1.1 400 Bad Request\r\n" +
-        "Content-Type: text/plain\r\n" +
-        "Connection: close\r\n" +
-        "\r\n" +
-        "Incorrect headers"
+    socket << "HTTP/1.1 400 Bad Request\r\n" +
+              "Content-Type: text/plain\r\n" +
+              "Connection: close\r\n" +
+              "\r\n" +
+              "Incorrect request"
     socket.close   
   end
 
   def send_handshake_response(ws_accept)
     socket << "HTTP/1.1 101 Switching Protocols\r\n" +
-      "Upgrade: websocket\r\n" +
-      "Connection: Upgrade\r\n" +
-      "Sec-WebSocket-Accept: #{ws_accept}\r\n" 
+              "Upgrade: websocket\r\n" +
+              "Connection: Upgrade\r\n" +
+              "Sec-WebSocket-Accept: #{ws_accept}\r\n" 
   end
 
   def create_websocket_accept(key)
-    accept = Digest::SHA1.digest(key + WS_MAGIC_STRING)
-    Base64.encode64(accept)
+    digest = Digest::SHA1.digest(key + WS_MAGIC_STRING)
+    Base64.encode64(digest)
   end
 
 end
