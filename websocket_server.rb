@@ -17,8 +17,8 @@ class WebsocketServer
   def connect(&block)
     loop do
       Thread.start(tcp_server.accept) do |socket|
-        connection = WebsocketConnection.new(socket, @path)
-        yield(connection) if connection.handshake
+          connection = WebsocketConnection.new(socket, @path)
+          yield(connection) if connection.handshake
       end
     end
   end

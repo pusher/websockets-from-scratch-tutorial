@@ -15,26 +15,25 @@ class WebsocketConnection
 
       if request =~ /GET #{path}/
         header = get_header
-        header =~ /Sec-WebSocket-Key: (.*)\r\n/
+        return false if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
         ws_accept = create_websocket_accept($1)
         send_handshake_response(ws_accept)
-        true
-      else
-        false
+        return true
       end
+      false
   end
 
   def listen
-    Thread.start(socket) do |socket|
+    Thread.new do
       loop do
 
-        fin, pre_length = socket.read(2).bytes
+        first_byte, length_indicator = socket.read(2).bytes
 
-        second_byte_mod = pre_length - 128
+        length_indicator -= 128
 
-        length =  if second_byte_mod <= 125
-                    second_byte_mod
-                  elsif second_byte_mod == 126
+        length =  if length_indicator <= 125
+                    length_indicator
+                  elsif length_indicator == 126
                     socket.read(2).unpack("n")[0]
                   else
                     socket.read(8).unpack("n")[0] # this is wrong
@@ -43,11 +42,11 @@ class WebsocketConnection
         keys = socket.read(4).bytes
         encoded = socket.read(length).bytes
 
-        content = encoded.each_with_index.map do |byte, index| 
+        message = encoded.each_with_index.map do |byte, index| 
           byte ^ keys[index % 4] 
         end.pack("c*")
 
-        yield(decoded)
+        yield(message)
       end
     end
   end
