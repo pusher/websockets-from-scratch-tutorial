@@ -3,24 +3,24 @@ class WebsocketConnection
   WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   OPCODE_TEXT = 0x01
 
-  attr_reader :socket, :path
+  attr_reader :socket, :path, :handshake_sent
 
   def initialize(socket, path)
-    @socket, @path = socket, path
+    @socket, @path, @handshake_sent = socket, path, false
+    begin_handshake
   end
 
-  def handshake 
+  def begin_handshake 
       request = socket.gets
       STDERR.puts request
 
       if request =~ /GET #{path}/
         header = get_header
-        return false if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
+        send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
         ws_accept = create_websocket_accept($1)
         send_handshake_response(ws_accept)
-        return true
+        @handshake_sent = true
       end
-      false
   end
 
   def listen
@@ -29,7 +29,7 @@ class WebsocketConnection
 
         first_byte, length_indicator = socket.read(2).bytes
 
-        length_indicator -= 128
+        length_indicator -= 128 # or `length_indicator & 0x7f`
 
         length =  if length_indicator <= 125
                     length_indicator
@@ -42,9 +42,11 @@ class WebsocketConnection
         keys = socket.read(4).bytes
         encoded = socket.read(length).bytes
 
-        message = encoded.each_with_index.map do |byte, index| 
+        decoded = encoded.each_with_index.map do |byte, index| 
           byte ^ keys[index % 4] 
-        end.pack("c*")
+        end
+
+        message = decoded.pack("c*")
 
         yield(message)
       end
@@ -55,8 +57,8 @@ class WebsocketConnection
     bytes = [0x80 | OPCODE_TEXT]
     size = message.bytesize
 
-    bytes +=  if size <= 125
-                [size]
+    bytes +=  if size <= 125 
+                [size] # i.e. `size | 0x00`; if masked, would be `size | 0x80`, or size + 128
               elsif size < 2**16
                 [126] + [size].pack("n").bytes
               else
@@ -74,11 +76,20 @@ class WebsocketConnection
     (line = socket.gets) == "\r\n" ? header : get_header(header + line)
   end
 
+  def send_400
+    socket.print "HTTP/1.1 400 Bad Request\r\n" +
+        "Content-Type: text/plain\r\n" +
+        "Connection: close\r\n" +
+        "\r\n" +
+        "Incorrect headers"
+    socket.close   
+  end
+
   def send_handshake_response(ws_accept)
     socket << "HTTP/1.1 101 Switching Protocols\r\n" +
       "Upgrade: websocket\r\n" +
       "Connection: Upgrade\r\n" +
-      "Sec-WebSocket-Accept: #{ws_accept}\r\n"    
+      "Sec-WebSocket-Accept: #{ws_accept}\r\n" 
   end
 
   def create_websocket_accept(key)
