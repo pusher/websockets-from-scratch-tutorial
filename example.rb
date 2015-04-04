@@ -4,9 +4,9 @@ server = WebsocketServer.new
 
 server.connect do |connection|
 
-	connection.listen do |message|
+  connection.listen do |message|
     puts "Received #{message}"
-		connection.send("Received #{message}. Thanks, yo!")
-	end
+    connection.send("Received #{message}. Thanks, yo!")
+  end
 
 end

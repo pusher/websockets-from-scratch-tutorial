@@ -36,7 +36,7 @@ class WebsocketConnection
                   elsif length_indicator == 126
                     socket.read(2).unpack("n")[0]
                   else
-                    socket.read(8).unpack("n")[0] # this is wrong
+                    socket.read(8).unpack("Q>")[0]
                   end
 
         keys = socket.read(4).bytes
@@ -60,7 +60,7 @@ class WebsocketConnection
               elsif size < 2**16
                 [126] + [size].pack("n").bytes
               else
-                [127] + [size].pack("n").bytes # also wrong
+                [127] + [size].pack("Q>").bytes
               end 
 
     bytes += message.bytes
