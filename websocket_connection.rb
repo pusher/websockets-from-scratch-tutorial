@@ -10,17 +10,6 @@ class WebsocketConnection
     begin_handshake
   end
 
-  def begin_handshake 
-    request = socket.gets
-    if request =~ /GET #{path}/
-      header = get_header
-      send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
-      ws_accept = create_websocket_accept($1)
-      send_handshake_response(ws_accept)
-      @handshake_sent = true
-    end
-  end
-
   def listen(&block)
     Thread.new do
       loop do
@@ -69,6 +58,17 @@ class WebsocketConnection
   end
 
   private
+
+  def begin_handshake 
+    request = socket.gets
+    if request =~ /GET #{path}/
+      header = get_header
+      send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
+      ws_accept = create_websocket_accept($1)
+      send_handshake_response(ws_accept)
+      @handshake_sent = true
+    end
+  end
 
   def get_header(header = "")
     (line = socket.gets) == "\r\n" ? header : get_header(header + line)
