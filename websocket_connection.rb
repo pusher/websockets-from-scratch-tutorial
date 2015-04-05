@@ -3,17 +3,16 @@ class WebsocketConnection
   WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   OPCODE_TEXT = 0x01
 
-  attr_reader :socket, :path, :handshake_sent
+  attr_reader :socket, :path, :handshake_made
 
   def initialize(socket, path)
-    @socket, @path, @handshake_sent = socket, path, false
+    @socket, @path, @handshake_made = socket, path, false
     begin_handshake
   end
 
   def listen(&block)
     Thread.new do
       loop do
-
         first_byte, length_indicator = socket.read(2).bytes
 
         length_indicator -= 128 # or `length_indicator & 0x7f`
@@ -60,13 +59,13 @@ class WebsocketConnection
   private
 
   def begin_handshake 
-    request = socket.gets
-    if request =~ /GET #{path}/
+    request_line = socket.gets
+    if request_line =~ /GET #{path}/
       header = get_header
       send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
       ws_accept = create_websocket_accept($1)
       send_handshake_response(ws_accept)
-      @handshake_sent = true
+      @handshake_made = true
     end
   end
 

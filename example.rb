@@ -6,7 +6,7 @@ server.connect do |connection|
   puts "Connected"
   connection.listen do |message|
     puts "Received #{message}"
-    connection.send("Received #{message}. Thanks, yo!")
+    connection.send("Received #{message}. Thanks!")
   end
 
 end
