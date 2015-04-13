@@ -15,7 +15,7 @@ class WebsocketServer
   def connect(&block)
     loop do
       Thread.start(@tcp_server.accept) do |socket|
-        send_handshake(socket) && yield(WebsocketConnection.new(socket, @path))
+        send_handshake(socket) && yield(WebsocketConnection.new(socket)) 
       end
     end
   end
@@ -24,15 +24,13 @@ class WebsocketServer
 
   def send_handshake(socket)
     request_line = socket.gets
-    puts request_line
-    if request_line =~ /GET #{@path} HTTP\/1.1/
-      header = get_header(socket)
-      return send_400(socket) if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
+    header = get_header(socket)
+    if (request_line =~ /GET #{@path} HTTP\/1.1/) && (header =~ /Sec-WebSocket-Key: (.*)\r\n/)
       ws_accept = create_websocket_accept($1)
       send_handshake_response(socket, ws_accept)
       return true
     end
-    socket.close
+    send_400(socket)
     false
   end
 
@@ -47,7 +45,6 @@ class WebsocketServer
               "\r\n" +
               "Incorrect request"
     socket.close
-    false  
   end
 
   def send_handshake_response(socket, ws_accept)

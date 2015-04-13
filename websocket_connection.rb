@@ -2,10 +2,10 @@ class WebsocketConnection
 
   OPCODE_TEXT = 0x01
 
-  attr_reader :socket, :path
+  attr_reader :socket
 
-  def initialize(socket, path)
-    @socket, @path = socket, path
+  def initialize(socket)
+    @socket = socket
   end
 
   def listen(&block)
