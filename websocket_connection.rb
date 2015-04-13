@@ -13,9 +13,9 @@ class WebsocketConnection
   def listen(&block)
     Thread.new do
       loop do
-        first_byte, length_indicator = socket.read(2).bytes
-
-        length_indicator -= 128 # or `length_indicator & 0x7f`
+        fin_and_opcode = socket.read(1).bytes
+        mask_and_length_indicator = socket.read(1).bytes[0]
+        length_indicator = mask_and_length_indicator - 128
 
         length =  if length_indicator <= 125
                     length_indicator
@@ -62,7 +62,7 @@ class WebsocketConnection
     request_line = socket.gets
     if request_line =~ /GET #{path}/
       header = get_header
-      send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
+      return send_400 if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
       ws_accept = create_websocket_accept($1)
       send_handshake_response(ws_accept)
       @handshake_made = true
