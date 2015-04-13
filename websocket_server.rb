@@ -24,13 +24,15 @@ class WebsocketServer
 
   def send_handshake(socket)
     request_line = socket.gets
-    if request_line =~ /GET #{@path}/
+    puts request_line
+    if request_line =~ /GET #{@path} HTTP\/1.1/
       header = get_header(socket)
       return send_400(socket) if !(header =~ /Sec-WebSocket-Key: (.*)\r\n/)
       ws_accept = create_websocket_accept($1)
       send_handshake_response(socket, ws_accept)
       return true
     end
+    socket.close
     false
   end
 
