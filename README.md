@@ -57,6 +57,8 @@ Let's start with two classes: our `WebsocketServer` and our `WebsocketConnection
 The `WebsocketServer` will be initialized with options, such as the path of the websocket endpoint, the port and the host - these will default to `'/'`, `4567` and `localhost` respectively. 
 
 ```ruby
+require 'socket'
+
 class WebsocketServer
 
   def initialize(options={path: '/', port: 4567, host: 'localhost'})
@@ -67,7 +69,7 @@ class WebsocketServer
  end
 ```
 
-Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it.
+Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it. Remember to require the built-in *socket* library that lets you create TCP connections.
 
 On calling `#connect`, our `WebSocketServer` will constantly be listening for incoming websocket requests on a separate thread. It will be responsible for validating incoming HTTP requests, and sending back a handshake. If a handshake can and has been made - that is, if `send_handshake` returns `true` - it will yield a `WebsocketConnection` to the block supplied, as shown in the example above. If `send_handshake` returns `false`, the server will not create the `WebsocketConnection` instance and will just carry on listening for new requests.
 
@@ -146,7 +148,7 @@ def send_400(socket)
 end
 ```
 
-If there is a value to `Sec-WebSocket-Key`, according to the regular expression above, we can take that value and create the `Sec-WebSocket-Accept` header in our response. It does so by taking the value of the `Sec-WebSocket-Key` and concatenating it with `"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"`, a 'magic string', defined in the [protocol specification](https://tools.ietf.org/html/rfc6455#page-60). It takes this concatentation, creates a SHA1 digest of it, then encodes this digest in Base64.
+If there is a value to `Sec-WebSocket-Key`, according to the regular expression above, we can take that value and create the `Sec-WebSocket-Accept` header in our response. It does so by taking the value of the `Sec-WebSocket-Key` and concatenating it with `"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"`, a 'magic string', defined in the [protocol specification](https://tools.ietf.org/html/rfc6455#page-60). It takes this concatentation, creates a SHA1 digest of it, then encodes this digest in Base64. We can do this using the built-in *digest/sha1* and *base64* libraries.
 
 ```ruby
 def send_handshake(socket)
@@ -161,6 +163,9 @@ def send_handshake(socket)
 end
 
 WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+require 'digest/sha1'
+require 'base64'
 
 def create_websocket_accept(key)
 	digest = Digest::SHA1.digest(key + WS_MAGIC_STRING)
