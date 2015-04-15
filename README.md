@@ -52,13 +52,15 @@ end
 
 Let's start with two classes: our `WebsocketServer` and our `WebsocketConnection`.
 
+>>> Where should these be created?
+
 #### `WebsocketServer`
 
 The `WebsocketServer` will be initialized with options, such as the path of the WebSocket endpoint, the port and the host - these will default to `'/'`, `4567` and `localhost` respectively. 
 
->>> missing require statement for TCPServer?
-
 ```ruby
+require 'socket'
+
 class WebsocketServer
 
   def initialize(options={path: '/', port: 4567, host: 'localhost'})
@@ -69,7 +71,7 @@ class WebsocketServer
  end
 ```
 
-Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it.
+Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it. Remember to require the built-in `socket` library that lets you create TCP connections.
 
 On calling `#connect`, our `WebsocketServer` will constantly be listening for incoming WebSocket requests on a separate thread. It will be responsible for validating incoming HTTP requests, and sending back a handshake. If a handshake can and has been made - that is, if `send_handshake` returns `true` - it will yield a `WebsocketConnection` to the `block` supplied, as shown in the example below. If `#send_handshake` returns `false`, the server will not create the `WebsocketConnection` instance and will just carry on listening for new requests.
 
@@ -81,7 +83,11 @@ class WebsocketServer
   def connect(&block)
     loop do
       Thread.start(@tcp_server.accept) do |socket|
-        send_handshake(socket) && yield(WebsocketConnection.new(socket))
+        begin
+          send_handshake(socket) && yield(WebsocketConnection.new(socket))
+        rescue => e
+          puts e.backtrace
+        end
       end
     end
   end
@@ -148,7 +154,7 @@ def send_400(socket)
 end
 ```
 
-If there is a value to `Sec-WebSocket-Key`, according to the regular expression above, we can take that value and within `create_websocket_accept` create the `Sec-WebSocket-Accept` header in our response. It does so by taking the value of the `Sec-WebSocket-Key` and concatenating it with `"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"`, a 'magic string', defined in the [protocol specification](https://tools.ietf.org/html/rfc6455#page-60). It takes this concatenation, creates a SHA1 digest of it, then encodes this digest in Base64.
+If there is a value to `Sec-WebSocket-Key`, according to the regular expression above, we can take that value and create the `Sec-WebSocket-Accept` header in our response. It does so by taking the value of the `Sec-WebSocket-Key` and concatenating it with `"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"`, a 'magic string', defined in the [protocol specification](https://tools.ietf.org/html/rfc6455#page-60). It takes this concatenation, creates a SHA1 digest of it, then encodes this digest in Base64. We can do this using the built-in `digest/sha1` and `base64` libraries.
 
 ```ruby
 def send_handshake(socket)
@@ -163,6 +169,9 @@ def send_handshake(socket)
 end
 
 WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+require 'digest/sha1'
+require 'base64'
 
 def create_websocket_accept(key)
 	digest = Digest::SHA1.digest(key + WS_MAGIC_STRING)
@@ -185,7 +194,7 @@ def send_handshake(socket)
   false
 end
 
-def send_handshake_response(ws_accept)
+def send_handshake_response(socket, ws_accept)
 	socket <<   "HTTP/1.1 101 Switching Protocols\r\n" +
 				"Upgrade: websocket\r\n" +
 				"Connection: Upgrade\r\n" +
@@ -211,7 +220,7 @@ Run this app and while this code is running, open up your browser console and cr
 var socket = new WebSocket("ws://localhost:3333");
 ```
 
-You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/jpatel531/socket-and-see/blob/frozen/websocket_connection.rb#L61-70).
+You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial/blob/master/websocket_server.rb#L25-L35).
 
 ### Listening For Messages
 
@@ -239,6 +248,8 @@ socket.send("hello");
 
 \- we should hope to see `"hello"` in our terminal window.
 
+>>> ^ Worth stating/clarifying that if you try this now you'll get an error?
+
 So let's create `WebsocketConnection#listen` method. In it we will open a new thread that constantly listens to incoming messages on the connection's socket.
 
 ```ruby
@@ -256,6 +267,8 @@ class WebsocketConnection
   
 end
 ```
+
+>>> ^ being ... rescue wrapper?
 
 As mentioned in the overview above, WebSocket messages are wrapped in frames, which are a sequence of bytes carrying information about the message. Our `#listen` method will parse the bytes of a frame and yield the message's content to the application thread.
 
@@ -459,11 +472,11 @@ end
 
 >>> above we use "c*" for the first time. It's not mentioned why.
 
-Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/jpatel531/socket-and-see/blob/master/websocket_connection.rb#L13-L40).
+Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/jpatel531/socket-and-see/blob/frozen/websocket_connection.rb#L13-L40).
 
 ### Sending Messages
 
-To complete our echo server and show the bidirectional power of websockets, let's implement a message sending method to our `WebsocketConnection` object. This should be a little more straightforward, as messages from a server do not have to be masked.
+To complete our echo server and show the bidirectional power of WebSockets, let's implement a message sending method to our `WebsocketConnection` object. This should be a little more straightforward, as messages from a server do not have to be masked.
 
 ```ruby
 def send(message)
@@ -564,21 +577,23 @@ end
 Run this server, and then go into your browser console. Then type:
 
 ```js
-var socket = new WebSocket("ws://localhost:3333")
+var socket = new WebSocket("ws://localhost:3333");
 
-socket.onmessage = function(event){console.log(event)}
+socket.onmessage = function(event){console.log(event.data);};
 ```
 
-This will set up your Websocket connection by sending a handshake to your server. Then, if a message is received, it will log it to the console.
+This will set up your WebSocket connection by sending a handshake to your server. Then, if a message is received, it will log it to the console.
 
 Let's send a message and see what we get back:
 
 ```js
-socket.send("hello world!")
+socket.send("hello world!");
 ```
 
 Immediately after sending the message, your browser should have logged out an event whose data is `"Received hello world. Thanks!"`. Meanwhile, your terminal running the server should have logged out `"Received hello world from the browser"`.
 
-## Where Does That Leave Us?
+That's it! I hope you enjoyed this post and that it was informative for those who were new to WebSocket.
 
-I hope you enjoyed this post and that it was informative for those who were new to websockets. As I mentioned earlier, there's a lot more one can improve and add to make it a fully-functional websocket server - not to mention making it able to handle thousands of concurrent connections. From experience, we've found that developers who implement their own scalable websocket solutions have found it tricky to maintain and debug. Thus Pusher's appeal to those for whom realtime is core to their application; we essentially host, maintain and scale these servers for you, and provide an easy-to-use API to interact with them so you can focus on the rest of your application. Hopefully this post has showed you a bit about what goes on underneath.
+## What's Missing?
+
+ As I mentioned earlier, there's a lot more one can improve and add to make it a fully-functional websocket server - not to mention making it able to handle thousands of concurrent connections. From experience, we've found that developers who implement their own scalable websocket solutions have found it tricky to maintain and debug. Thus Pusher's appeal to those for whom realtime is core to their application; we essentially host, maintain and scale these servers for you, and provide an easy-to-use API to interact with them so you can focus on the rest of your application. Hopefully this post has showed you a bit about what goes on underneath.
