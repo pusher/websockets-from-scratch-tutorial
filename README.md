@@ -50,9 +50,7 @@ end
 
 ### Getting Started
 
-Let's start with two classes: our `WebsocketServer` and our `WebsocketConnection`.
-
->>> Where should these be created?
+Let's start with two classes: our `WebsocketServer` and our `WebsocketConnection`. Create them in files called `websocket_server.rb` and `websocket_connection.rb` respectively. 
 
 #### `WebsocketServer`
 
@@ -246,9 +244,7 @@ var socket = new WebSocket("ws://localhost:3333");
 socket.send("hello");
 ```
 
-\- we should hope to see `"hello"` in our terminal window.
-
->>> ^ Worth stating/clarifying that if you try this now you'll get an error?
+\- we should hope to see `"hello"` in our terminal window. Of course if you try this out now you'll get an error.
 
 So let's create `WebsocketConnection#listen` method. In it we will open a new thread that constantly listens to incoming messages on the connection's socket.
 
@@ -260,15 +256,17 @@ class WebsocketConnection
   def listen(&block)
     Thread.new do
       loop do
-        ...
+        begin 
+          ...
+        rescue => e
+          puts e.backtrace
+        end
       end
     end
   end
   
 end
 ```
-
->>> ^ being ... rescue wrapper?
 
 As mentioned in the overview above, WebSocket messages are wrapped in frames, which are a sequence of bytes carrying information about the message. Our `#listen` method will parse the bytes of a frame and yield the message's content to the application thread.
 
@@ -329,9 +327,7 @@ def listen(&block)
 end
 ```
 
-If the `length_indicator` is equal to 126, the next two bytes need to be parsed into a 16-bit unsigned integer to get the numeric value of the length. We do this by using Ruby's `Array#unpack` method, passing in `"n"` to show we want a 16-bit unsigned integer.
-
->>> where did "n" come from? Maybe a link to the Ruby docs?
+If the `length_indicator` is equal to 126, the next two bytes need to be parsed into a 16-bit unsigned integer to get the numeric value of the length. We do this by using Ruby's `Array#unpack` method, passing in `"n"` to show we want a 16-bit unsigned integer, [as per Ruby's documentation here](http://ruby-doc.org/core-2.2.0/Array.html#pack-method).
 
 ```ruby
 def listen(&block)
@@ -353,8 +349,6 @@ end
 ```
 
 If the `length_indicator` is equal to 127, the next eight bytes will need to be parsed into a 64-bit unsigned integer to get the length. `"Q>"` is passed to `unpack` to indicate this.
-
->>> Where did Q> come from? Maybe a link to the Ruby docs?
 
 ```ruby
 def listen(&block)
@@ -404,9 +398,8 @@ def listen(&block)
 end
 ```
 
-Let's again use the mask-key to decode the content by using this magic function that loops through the bytes and [XORs](http://en.wikipedia.org/wiki/Bitwise_operation#XOR) the octet with the `(i % 4)`th octet of the mask.
+Let's again use the mask-key to decode the content by using this magic function that loops through the bytes and [XORs](http://en.wikipedia.org/wiki/Bitwise_operation#XOR) the octet with the `(i % 4)`th octet of the mask. This is defined in the specification [here](https://tools.ietf.org/html/rfc6455#page-33). 
 
->>> I'm assuming this XOR etc ^ is in the spec?
 
 ```ruby
 def listen(&block)
@@ -462,15 +455,13 @@ def listen(&block)
         byte ^ keys[index % 4] 
       end
 
-      message = decoded.pack("c*")
+      message = decoded.pack("c*") # "c*" turns the byte array into a string
 
       yield(message)
     end
   end
 end
 ```
-
->>> above we use "c*" for the first time. It's not mentioned why.
 
 Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/jpatel531/socket-and-see/blob/frozen/websocket_connection.rb#L13-L40).
 
