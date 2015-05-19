@@ -26,8 +26,8 @@ class WebsocketConnection
         keys = socket.read(4).bytes
         encoded = socket.read(length).bytes
 
-        decoded = encoded.each_with_index.map do |byte, index| 
-          byte ^ keys[index % 4] 
+        decoded = encoded.each_with_index.map do |byte, index|
+          byte ^ keys[index % 4]
         end
 
         message = decoded.pack("c*")
@@ -41,13 +41,13 @@ class WebsocketConnection
     bytes = [0x80 | OPCODE_TEXT]
     size = message.bytesize
 
-    bytes +=  if size <= 125 
+    bytes +=  if size <= 125
                 [size] # i.e. `size | 0x00`; if masked, would be `size | 0x80`, or size + 128
               elsif size < 2**16
                 [126] + [size].pack("n").bytes
               else
                 [127] + [size].pack("Q>").bytes
-              end 
+              end
 
     bytes += message.bytes
     data = bytes.pack("C*")
