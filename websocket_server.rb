@@ -12,12 +12,11 @@ class WebSocketServer
     @tcp_server = TCPServer.new(host, port)
   end
 
-  def connect(&block)
-    loop do
-      Thread.start(@tcp_server.accept) do |socket|
-        send_handshake(socket) && yield(WebSocketConnection.new(socket))
-      end
-    end
+  # Returns a new WebSocketConnection to the client after handshake
+  def accept
+    socket = @tcp_server.accept
+    send_handshake(socket)
+    WebSocketConnection.new(socket)
   end
 
   private

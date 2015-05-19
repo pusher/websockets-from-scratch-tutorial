@@ -2,11 +2,12 @@ require_relative 'websocket_server'
 
 server = WebsocketServer.new
 
-server.connect do |connection|
-  puts "Connected"
-  connection.listen do |message|
-    puts "Received #{message}"
-    connection.send("Received #{message}. Thanks!")
+loop do
+  Thread.new(server.accept) do |connection|
+    puts "Connected"
+    while (message = connection.recv)
+      puts "Received #{message}"
+      connection.send("Received #{message}. Thanks!")
+    end
   end
-
 end
