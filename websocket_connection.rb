@@ -1,4 +1,4 @@
-class WebsocketConnection
+class WebSocketConnection
 
   OPCODE_TEXT = 0x01
 

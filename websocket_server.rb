@@ -3,7 +3,7 @@ require 'base64'
 require 'socket'
 require_relative 'websocket_connection'
 
-class WebsocketServer
+class WebSocketServer
 
   WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -15,7 +15,7 @@ class WebsocketServer
   def connect(&block)
     loop do
       Thread.start(@tcp_server.accept) do |socket|
-        send_handshake(socket) && yield(WebsocketConnection.new(socket))
+        send_handshake(socket) && yield(WebSocketConnection.new(socket))
       end
     end
   end
