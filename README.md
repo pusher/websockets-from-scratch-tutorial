@@ -1,6 +1,6 @@
 # WebSockets From Scratch
 
-I have been at Pusher for almost 6 months and, mainly working on customer-facing developer work, parts of our deeper infrastructure have seemed a bit of a black box to me. Pusher, an API that lets you send realtime data from server to client or from client to client, has the WebSocket protocol at its core. I was aware of how the HTTP protocol worked, but not WebSocket - aside from the fact it lets you do some nifty realtime stuff.
+I have been at Pusher for almost 6 months and, mainly working on customer-facing developer work, parts of our deeper infrastructure have seemed a bit of a black box to me. Pusher, a message service that lets you send realtime data from server to client or from client to client, has the WebSocket protocol at its core. I was aware of how the HTTP protocol worked, but not WebSocket - aside from the fact it lets you do some nifty realtime stuff.
 
 Therefore I decided to dig a little deeper and try to build a WebSocket server from scratch - and by 'scratch', I mean using only Ruby's built-in libraries. This blog post is to partly share what I've learnt and partly act as a tutorial, given that I couldn't find many that would lead me through the process step-by-step. That said, there were plenty of awesome resources for getting to grips on the matter, such as on [Mozilla](https://developer.mozilla.org/en-US/docs/WebSockets/Writing_WebSocket_servers) and this post from [Armin Ronacher](http://lucumr.pocoo.org/2012/9/24/websockets-101/).
 
