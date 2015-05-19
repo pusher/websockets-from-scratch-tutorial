@@ -3,7 +3,7 @@ require 'base64'
 require 'socket'
 require_relative 'websocket_connection'
 
-class WebsocketServer
+class WebSocketServer
 
   WS_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -12,12 +12,11 @@ class WebsocketServer
     @tcp_server = TCPServer.new(host, port)
   end
 
-  def connect(&block)
-    loop do
-      Thread.start(@tcp_server.accept) do |socket|
-        send_handshake(socket) && yield(WebsocketConnection.new(socket)) 
-      end
-    end
+  # Returns a new WebSocketConnection to the client after handshake
+  def accept
+    socket = @tcp_server.accept
+    send_handshake(socket)
+    WebSocketConnection.new(socket)
   end
 
   private
@@ -51,7 +50,7 @@ class WebsocketServer
     socket << "HTTP/1.1 101 Switching Protocols\r\n" +
               "Upgrade: websocket\r\n" +
               "Connection: Upgrade\r\n" +
-              "Sec-WebSocket-Accept: #{ws_accept}\r\n" 
+              "Sec-WebSocket-Accept: #{ws_accept}\r\n"
   end
 
   def create_websocket_accept(key)

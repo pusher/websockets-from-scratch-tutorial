@@ -1,10 +1,10 @@
-# Websockets From Scratch
+# WebSockets From Scratch
 
-I have been at Pusher for almost 6 months and, mainly working on customer-facing developer work, parts of our deeper infrastructure have seemed a bit of a black box to me. Pusher, an API that lets you send realtime data from server to client or from client to client, has the websockets protocol at its core. I was aware of how the HTTP protocol worked, but not WebSocket - aside from the fact it lets you do some nifty realtime stuff. 
+I have been at Pusher for almost 6 months and, mainly working on customer-facing developer work, parts of our deeper infrastructure have seemed a bit of a black box to me. Pusher, a message service that lets you send realtime data from server to client or from client to client, has the WebSocket protocol at its core. I was aware of how the HTTP protocol worked, but not WebSocket - aside from the fact it lets you do some nifty realtime stuff.
 
-Therefore I decided to dig a little deeper and try to build a WebSocket server from scratch - and by 'scratch', I mean using only Ruby's built-in libraries. This blog post is to partly share what I've learnt and partly act as a tutorial, given that I couldn't find many that would lead me through the process step-by-step. That said, there were plenty of awesome resources for getting to grips on the matter, such as on [Mozilla](https://developer.mozilla.org/en-US/docs/WebSockets/Writing_WebSocket_servers) and this post from [Armin Ronacher](http://lucumr.pocoo.org/2012/9/24/websockets-101/). 
+Therefore I decided to dig a little deeper and try to build a WebSocket server from scratch - and by 'scratch', I mean using only Ruby's built-in libraries. This blog post is to partly share what I've learnt and partly act as a tutorial, given that I couldn't find many that would lead me through the process step-by-step. That said, there were plenty of awesome resources for getting to grips on the matter, such as on [Mozilla](https://developer.mozilla.org/en-US/docs/WebSockets/Writing_WebSocket_servers) and this post from [Armin Ronacher](http://lucumr.pocoo.org/2012/9/24/websockets-101/).
 
-This guide is aimed at people who are new to WebSockets, or just wish to know more about what's under the hood. What I'll cover, in around 100 lines of Ruby, is:
+This guide is aimed at people who are new to WebSocket, or just wish to know more about what's under the hood. What I'll cover, in around 100 lines of Ruby, is:
 
 * The HTTP handshake that initiates a WebSocket connection.
 * Listening to messages on the server.
@@ -12,15 +12,15 @@ This guide is aimed at people who are new to WebSockets, or just wish to know mo
 
 A lot of very important features will be left out for the sake of brevity, such as ping/pong heartbeats, types of messages that aren't UTF-8 text data, security, proxying, handling different WebSocket protocol versions, and message fragmentation. So let's get to it.
 
-## An Overview to the Websockets Procotol
+## An Overview to the WebSocket Procotol
 
 WebSocket, like HTTP, is a layer upon the [TCP protocol](http://en.wikipedia.org/wiki/Transmission_Control_Protocol). A high-level difference between the two is that a classic HTTP response closes the TCP socket, whereas in the WebSocket protocol, the connection stays open. This allows bi-directional communication between the server and client, and is great for the realtime functionality you are used to: chat applications, data visualization, activity streams and so on.
 
-A WebSocket connection begins with a HTTP GET request from the client to the server, called the 'handshake'. This request carries with it a `Connection: upgrade` and `Upgrade: websocket` header to tell the server that it wants to begin a WebSocket connection, and a `Sec-Websocket-Version` header that indicates the kind of response it wants. In this guide we'll only focus on version 13. 
+A WebSocket connection begins with a HTTP GET request from the client to the server, called the 'handshake'. This request carries with it a `Connection: upgrade` and `Upgrade: websocket` header to tell the server that it wants to begin a WebSocket connection, and a `Sec-WebSocket-Version` header that indicates the kind of response it wants. In this guide we'll only focus on version 13.
 
-The request headers also include a `Sec-WebSocket-Key` field. With this, the server creates a `Sec-WebSocket-Accept` header that forms part of its response. How it does this, I will explain later. 
+The request headers also include a `Sec-WebSocket-Key` field. With this, the server creates a `Sec-WebSocket-Accept` header that forms part of its response. How it does this, I will explain later.
 
-Once this handshake is made, each party is free to exchange messages, which are wrapped in 'frames'. Each frame consists of information about: 
+Once this handshake is made, each party is free to exchange messages, which are wrapped in 'frames'. Each frame consists of information about:
 
 - Whether this frame is or isn't part of a continuation. In this guide, we'll only deal with frames that contain a complete message (not fragmented).
 - The content-type. In this post, we'll only deal with UTF8-encoded text.
@@ -36,7 +36,7 @@ Once this handshake is made, each party is free to exchange messages, which are 
 During this post we'll build a simple echo server that takes messages from a client and sends them back with a thank you, simply as a basic implementation of a WebSocket server.
 
 ```ruby
-server = WebsocketServer.new(port: 3333, path: '/')
+server = WebSocketServer.new(port: 3333, path: '/')
 
 server.connect do |connection|
   puts "Connected"
@@ -50,16 +50,16 @@ end
 
 ### Getting Started
 
-Let's start with two classes: our `WebsocketServer` and our `WebsocketConnection`. Create them in files called `websocket_server.rb` and `websocket_connection.rb` respectively. 
+Let's start with two classes: our `WebSocketServer` and our `WebSocketConnection`. Create them in files called `websocket_server.rb` and `websocket_connection.rb` respectively.
 
-#### `WebsocketServer`
+#### `WebSocketServer`
 
-The `WebsocketServer` will be initialized with options, such as the path of the WebSocket endpoint, the port and the host - these will default to `'/'`, `4567` and `localhost` respectively. 
+The `WebSocketServer` will be initialized with options, such as the path of the WebSocket endpoint, the port and the host - these will default to `'/'`, `4567` and `localhost` respectively.
 
 ```ruby
 require 'socket'
 
-class WebsocketServer
+class WebSocketServer
 
   def initialize(options={path: '/', port: 4567, host: 'localhost'})
     @path, port, host = options[:path], options[:port], options[:host]
@@ -71,37 +71,37 @@ class WebsocketServer
 
 Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it. Remember to require the built-in `socket` library that lets you create TCP connections.
 
-On calling `#connect`, our `WebsocketServer` will constantly be listening for incoming WebSocket requests on a separate thread. It will be responsible for validating incoming HTTP requests, and sending back a handshake. If a handshake can and has been made - that is, if `send_handshake` returns `true` - it will yield a `WebsocketConnection` to the `block` supplied, as shown in the example below. If `#send_handshake` returns `false`, the server will not create the `WebsocketConnection` instance and will just carry on listening for new requests.
+On calling `#connect`, our `WebSocketServer` will constantly be listening for incoming WebSocket requests on a separate thread. It will be responsible for validating incoming HTTP requests, and sending back a handshake. If a handshake can and has been made - that is, if `send_handshake` returns `true` - it will yield a `WebSocketConnection` to the `block` supplied, as shown in the example below. If `#send_handshake` returns `false`, the server will not create the `WebSocketConnection` instance and will just carry on listening for new requests.
 
 ```ruby
-class WebsocketServer
+class WebSocketServer
 
   ...
-  
+
   def connect(&block)
     loop do
       Thread.start(@tcp_server.accept) do |socket|
         begin
-          send_handshake(socket) && yield(WebsocketConnection.new(socket))
+          send_handshake(socket) && yield(WebSocketConnection.new(socket))
         rescue => e
           puts e.backtrace
         end
       end
     end
   end
-  
+
 end
 ```
 
-#### `WebsocketConnection`
+#### `WebSocketConnection`
 
-The `WebsocketConnection` will be our API for sending and receiving messages. We initialize it with the TCP socket made upon firing up the `TCPServer` in `WebsocketServer#connect`.
+The `WebSocketConnection` will be our API for sending and receiving messages. We initialize it with the TCP socket made upon firing up the `TCPServer` in `WebSocketServer#connect`.
 
 ```ruby
-class WebsocketConnection
+class WebSocketConnection
 
   attr_reader :socket
-  
+
   def initialize(socket)
     @socket = socket
   end
@@ -112,7 +112,7 @@ The connection object will read and write to this socket as it listens for and s
 
 ### The Handshake
 
-Going back to our `WebsocketServer` class, a `WebsocketServer#send_handshake` method is where everything begins. Firstly, let's get the `request_line` (e.g. `'GET / HTTP/1.1'`) and request `header` from the socket, using the `socket#gets` method. This will block if there is nothing yet available, and will also get a line at a time. 
+Going back to our `WebSocketServer` class, a `WebSocketServer#send_handshake` method is where everything begins. Firstly, let's get the `request_line` (e.g. `'GET / HTTP/1.1'`) and request `header` from the socket, using the `socket#gets` method. This will block if there is nothing yet available, and will also get a line at a time.
 
 ```ruby
 private
@@ -143,12 +143,12 @@ def send_handshake(socket)
 end
 
 def send_400(socket)
-    socket << "HTTP/1.1 400 Bad Request\r\n" +
-              "Content-Type: text/plain\r\n" +
-              "Connection: close\r\n" +
-              "\r\n" +
-              "Incorrect request"
-    socket.close
+  socket << "HTTP/1.1 400 Bad Request\r\n" +
+            "Content-Type: text/plain\r\n" +
+            "Connection: close\r\n" +
+            "\r\n" +
+            "Incorrect request"
+  socket.close
 end
 ```
 
@@ -159,7 +159,7 @@ def send_handshake(socket)
   request_line = socket.gets
   header = get_header(socket)
   if (request_line =~ /GET #{@path} HTTP\/1.1/) && (header =~ /Sec-WebSocket-Key: (.*)\r\n/)
-    ws_accept = create_websocket_accept($1)
+    ws_accept = create__accept($1)
     ...
   end
   send_400(socket)
@@ -172,8 +172,8 @@ require 'digest/sha1'
 require 'base64'
 
 def create_websocket_accept(key)
-	digest = Digest::SHA1.digest(key + WS_MAGIC_STRING)
-	Base64.encode64(digest)
+  digest = Digest::SHA1.digest(key + WS_MAGIC_STRING)
+  Base64.encode64(digest)
 end
 ```
 
@@ -184,7 +184,7 @@ def send_handshake(socket)
   request_line = socket.gets
   header = get_header(socket)
   if (request_line =~ /GET #{@path} HTTP\/1.1/) && (header =~ /Sec-WebSocket-Key: (.*)\r\n/)
-    ws_accept = create_websocket_accept($1)
+    ws_accept = create__accept($1)
     send_handshake_response(socket, ws_accept)
     return true
   end
@@ -193,19 +193,19 @@ def send_handshake(socket)
 end
 
 def send_handshake_response(socket, ws_accept)
-	socket <<   "HTTP/1.1 101 Switching Protocols\r\n" +
-				"Upgrade: websocket\r\n" +
-				"Connection: Upgrade\r\n" +
-				"Sec-WebSocket-Accept: #{ws_accept}\r\n" 
+  socket << "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Accept: #{ws_accept}\r\n"
 end
 ```
 
-Now that we've sent the handshake and returned `true`, a new `WebsocketConnection` will be yielded to the application thread. So, test it out!
+Now that we've sent the handshake and returned `true`, a new `WebSocketConnection` will be yielded to the application thread. So, test it out!
 
 In your Ruby app, write this:
 
 ```ruby
-server = WebsocketServer.new(port: 3333, path: '/')
+server = WebSocketServer.new(port: 3333, path: '/')
 
 server.connect do |connection|
   puts "Connected"
@@ -218,22 +218,21 @@ Run this app and while this code is running, open up your browser console and cr
 var socket = new WebSocket("ws://localhost:3333");
 ```
 
-You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial/blob/master/websocket_server.rb#L25-L35).
+You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/s-from-scratch-tutorial/blob/master/websocket_server.rb#L25-L35).
 
 ### Listening For Messages
 
-Now that clients can connect to us and the user has access to the `WebsocketConnection` object, we can start listening to messages from the client.
+Now that clients can connect to us and the user has access to the `WebSocketConnection` object, we can start listening to messages from the client.
 
 By the end of this section, here is what we want to have:
 
 ```ruby
 server.connect do  |connection|
-	puts "Connected"
+  puts "Connected"
 
-	connection.listen do |message|
-		puts message
-	end
-
+  connection.listen do |message|
+    puts message
+  end
 end
 ```
 
@@ -246,17 +245,17 @@ socket.send("hello");
 
 \- we should hope to see `"hello"` in our terminal window. Of course if you try this out now you'll get an error.
 
-So let's create `WebsocketConnection#listen` method. In it we will open a new thread that constantly listens to incoming messages on the connection's socket.
+So let's create `WebSocketConnection#listen` method. In it we will open a new thread that constantly listens to incoming messages on the connection's socket.
 
 ```ruby
-class WebsocketConnection
+class WebSocketConnection
 
   ...
-  
+
   def listen(&block)
     Thread.new do
       loop do
-        begin 
+        begin
           ...
         rescue => e
           puts e.backtrace
@@ -264,7 +263,7 @@ class WebsocketConnection
       end
     end
   end
-  
+
 end
 ```
 
@@ -300,7 +299,6 @@ def listen(&block)
   Thread.new do
     loop do
       fin_and_opcode = socket.read(1).bytes[0]
-      
       mask_and_length_indicator = socket.read(1).bytes[0]
       length_indicator = mask_and_length_indicator - 128
     end
@@ -365,7 +363,7 @@ def listen(&block)
                 else
                   socket.read(8).unpack("Q>")[0]
                 end
-		...
+      ...
     end
   end
 end
@@ -391,14 +389,14 @@ def listen(&block)
 
       keys = socket.read(4).bytes
       encoded = socket.read(length).bytes
-	
-		...
+
+      ...
     end
   end
 end
 ```
 
-Let's again use the mask-key to decode the content by using this magic function that loops through the bytes and [XORs](http://en.wikipedia.org/wiki/Bitwise_operation#XOR) the octet with the `(i % 4)`th octet of the mask. This is defined in the specification [here](https://tools.ietf.org/html/rfc6455#page-33). 
+Let's again use the mask-key to decode the content by using this magic function that loops through the bytes and [XORs](http://en.wikipedia.org/wiki/Bitwise_operation#XOR) the octet with the `(i % 4)`th octet of the mask. This is defined in the specification [here](https://tools.ietf.org/html/rfc6455#page-33).
 
 
 ```ruby
@@ -420,11 +418,11 @@ def listen(&block)
       keys = socket.read(4).bytes
       encoded = socket.read(length).bytes
 
-      decoded = encoded.each_with_index.map do |byte, index| 
-        byte ^ keys[index % 4] 
+      decoded = encoded.each_with_index.map do |byte, index|
+        byte ^ keys[index % 4]
       end
 
-		...
+      ...
     end
   end
 end
@@ -451,8 +449,8 @@ def listen(&block)
       keys = socket.read(4).bytes
       encoded = socket.read(length).bytes
 
-      decoded = encoded.each_with_index.map do |byte, index| 
-        byte ^ keys[index % 4] 
+      decoded = encoded.each_with_index.map do |byte, index|
+        byte ^ keys[index % 4]
       end
 
       message = decoded.pack("c*") # "c*" turns the byte array into a string
@@ -463,11 +461,11 @@ def listen(&block)
 end
 ```
 
-Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/jpatel531/socket-and-see/blob/frozen/websocket_connection.rb#L13-L40).
+Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/jpatel531/socket-and-see/blob/frozen/_connection.rb#L13-L40).
 
 ### Sending Messages
 
-To complete our echo server and show the bidirectional power of WebSockets, let's implement a message sending method to our `WebsocketConnection` object. This should be a little more straightforward, as messages from a server do not have to be masked.
+To complete our echo server and show the bidirectional power of WebSockets, let's implement a message sending method to our `WebSocketConnection` object. This should be a little more straightforward, as messages from a server do not have to be masked.
 
 ```ruby
 def send(message)
@@ -483,13 +481,13 @@ If the size is smaller or equal to 125, we concatenate this to the byte array.
 
 ```ruby
 def send(message)
-  bytes = [129]   
+  bytes = [129]
   size = message.bytesize
 
-  bytes +=  if size <= 125 
+  bytes +=  if size <= 125
               [size]
               ...
-            end 
+            end
 end
 ```
 
@@ -497,15 +495,15 @@ If the size is greater than 125 but smaller than 2<sup>16</sup>, which is the ma
 
 ```ruby
 def send(message)
-  bytes = [129]   
+  bytes = [129]
   size = message.bytesize
 
-  bytes +=  if size <= 125 
+  bytes +=  if size <= 125
               [size]
             elsif size < 2**16
               [126] + [size].pack("n").bytes
             ...
-            end 
+            end
 end
 ```
 
@@ -513,16 +511,16 @@ If the size is greater than 2<sup>16</sup>, we append 127 to the frame and then 
 
 ```ruby
 def send(message)
-  bytes = [129]   
+  bytes = [129]
   size = message.bytesize
 
-  bytes +=  if size <= 125 
+  bytes +=  if size <= 125
               [size]
             elsif size < 2**16
               [126] + [size].pack("n").bytes
             else
               [127] + [size].pack("Q>").bytes
-            end 
+            end
   ...
 end
 ```
@@ -531,16 +529,16 @@ Now we can simply append our `message` as bytes. Then we turn this byte array in
 
 ```ruby
 def send(message)
-  bytes = [129]   
+  bytes = [129]
   size = message.bytesize
 
-  bytes +=  if size <= 125 
+  bytes +=  if size <= 125
               [size]
             elsif size < 2**16
               [126] + [size].pack("n").bytes
             else
               [127] + [size].pack("Q>").bytes
-            end 
+            end
 
   bytes += message.bytes
   data = bytes.pack("C*")
@@ -550,10 +548,10 @@ end
 
 ### The Echo Server
 
-Now that we can begin connections, send messages and receive messages, we can write our tiny echo-server application. 
+Now that we can begin connections, send messages and receive messages, we can write our tiny echo-server application.
 
 ```ruby
-server = WebsocketServer.new(port: 3333, path: '/')
+server = WebSocketServer.new(port: 3333, path: '/')
 
 server.connect do |connection|
   puts "Connected"
@@ -587,4 +585,4 @@ That's it! I hope you enjoyed this post and that it was informative for those wh
 
 ## What's Missing?
 
- As I mentioned earlier, there's a lot more one can improve and add to make it a fully-functional websocket server - not to mention making it able to handle thousands of concurrent connections. From experience, we've found that developers who implement their own scalable websocket solutions have found it tricky to maintain and debug. Thus Pusher's appeal to those for whom realtime is core to their application; we essentially host, maintain and scale these servers for you, and provide an easy-to-use API to interact with them so you can focus on the rest of your application. Hopefully this post has showed you a bit about what goes on underneath.
+As I mentioned earlier, there's a lot more one can improve and add to make it a fully-functional WebSocket server - not to mention making it able to handle thousands of concurrent connections. From experience, we've found that developers who implement their own scalable WebSocket solutions have found it tricky to maintain and debug. Thus Pusher's appeal to those for whom realtime is core to their application; we essentially host, maintain and scale these servers for you, and provide an easy-to-use API to interact with them so you can focus on the rest of your application. Hopefully this post has showed you a bit about what goes on underneath.
