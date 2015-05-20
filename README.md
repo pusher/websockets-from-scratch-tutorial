@@ -218,7 +218,11 @@ Run this app and while this code is running, open up your browser console and cr
 var socket = new WebSocket("ws://localhost:3333");
 ```
 
+<<<<<<< HEAD
 You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/s-from-scratch-tutorial/blob/master/websocket_server.rb#L25-L35).
+=======
+You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial).
+>>>>>>> b104c686e55443051ee8a3958126e164500e0aa0
 
 ### Listening For Messages
 
