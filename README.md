@@ -72,7 +72,7 @@ class WebSocketServer
 
 Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it. Remember to require the built-in `socket` library that lets you create TCP connections.
 
-On calling `#accept`, our `WebSocketServer` will constantly be listening for incoming WebSocket requests. It will be responsible for validating incoming HTTP requests, and sending back a handshake.  If a handshake can and has been made - that is, if send_handshake returns true - it will return a new `WebSocketConnection`, as shown in the example below. 
+On calling `#accept`, our `WebSocketServer` will be responding to any incoming WebSocket requests. It will be responsible for validating incoming HTTP requests, and sending back a handshake.  If a handshake can and has been made - that is, if send_handshake returns `true` - it will return a new `WebSocketConnection`, as shown in the example below. 
 
 ```ruby
 class WebSocketServer
@@ -89,7 +89,7 @@ end
 
 #### `WebSocketConnection`
 
-The `WebSocketConnection` will be our API for sending and receiving messages. We initialize it with the TCP socket made upon firing up the `TCPServer` in `WebSocketServer#connect`.
+The `WebSocketConnection` will be our API for sending and receiving messages. We initialize it with the TCP socket made upon firing up the `TCPServer` in `WebSocketServer#accept`.
 
 ```ruby
 class WebSocketConnection
@@ -123,7 +123,7 @@ def get_header(socket, header = "")
 end
 ```
 
-If we have not received a GET request at the specified path, or there is no `Sec-WebSocket-Key` in the header, let's write a 400 error to the socket. We can use the `<<` operator, and then close the socket to end the request. By returning `false`, we make sure a `WebSocketConnection` is not created and yielded to the application thread.
+If we have not received a GET request at the specified path, or there is no `Sec-WebSocket-Key` in the header, let's write a 400 error to the socket. We can use the `<<` operator, and then close the socket to end the request. By returning `false`, we make sure a `WebSocketConnection` is not created and returned to the application.
 
 ```ruby
 def send_handshake(socket)
@@ -199,7 +199,7 @@ Now that we've sent the handshake and returned `true`, a new `WebSocketConnectio
 In your Ruby app, write this:
 
 ```ruby
-server = WebSocketServer.new(port: 3333, path: '/')
+server = WebSocketServer.new
 
 loop do
   Thread.new(server.accept) do |connection|
@@ -208,13 +208,13 @@ loop do
 end
 ```
 
-Run this app and while this code is running, open up your browser console and create a WebSocket connection to your server:
+Run this app and while this code is running, open up your browser console (on a page *not* served via HTTPS) and create a WebSocket connection to your server:
 
 ```js
-var socket = new WebSocket("ws://localhost:3333");
+var socket = new WebSocket("ws://localhost:4567");
 ```
 
-You should see that a `connection` has been made upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial).
+You should see that a `connection` has been made upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial). 
 
 ### Listening For Messages
 
@@ -236,7 +236,7 @@ end
 And if from our browser console, we type -
 
 ```js
-var socket = new WebSocket("ws://localhost:3333");
+var socket = new WebSocket("ws://localhost:4567");
 socket.send("hello");
 ```
 
@@ -271,6 +271,7 @@ Using the `TCPSocket#read` method, we can read `n` bytes at a time:
 ```ruby
 def recv
     fin_and_opcode = socket.read(1).bytes[0] # get the 0th item of [129]
+    ...
 end
 ```
 
@@ -283,6 +284,7 @@ def recv
   fin_and_opcode = socket.read(1).bytes[0]
   mask_and_length_indicator = socket.read(1).bytes[0]
   length_indicator = mask_and_length_indicator - 128
+  ...
 end
 ```
 
@@ -413,7 +415,7 @@ def recv
 end
 ```
 
-Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/jpatel531/socket-and-see/blob/frozen/_connection.rb#L13-L40).
+Test it out on the example at the top of this section. If you've gotten stuck, you can refer to the code [here](https://github.com/pusher/websockets-from-scratch-tutorial).
 
 ### Sending Messages
 

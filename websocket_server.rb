@@ -15,8 +15,7 @@ class WebSocketServer
   # Returns a new WebSocketConnection to the client after handshake
   def accept
     socket = @tcp_server.accept
-    send_handshake(socket)
-    WebSocketConnection.new(socket)
+    send_handshake(socket) && WebSocketConnection.new(socket)
   end
 
   private
