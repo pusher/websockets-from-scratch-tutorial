@@ -36,15 +36,16 @@ Once this handshake is made, each party is free to exchange messages, which are 
 During this post we'll build a simple echo server that takes messages from a client and sends them back with a thank you, simply as a basic implementation of a WebSocket server.
 
 ```ruby
-server = WebSocketServer.new(port: 3333, path: '/')
+server = WebsocketServer.new
 
-server.connect do |connection|
-  puts "Connected"
-  connection.listen do |message|
-    puts "Received #{message} from the browser"
-    connection.send("Received #{message}. Thanks!")
+loop do
+  Thread.new(server.accept) do |connection|
+    puts "Connected"
+    while (message = connection.recv)
+      puts "Received #{message}"
+      connection.send("Received #{message}. Thanks!")
+    end
   end
-
 end
 ```
 
@@ -71,23 +72,16 @@ class WebSocketServer
 
 Upon initializaton, a `TCPServer` object, will be created with our host and port options - though it will not run until we '`accept`' it. Remember to require the built-in `socket` library that lets you create TCP connections.
 
-On calling `#connect`, our `WebSocketServer` will constantly be listening for incoming WebSocket requests on a separate thread. It will be responsible for validating incoming HTTP requests, and sending back a handshake. If a handshake can and has been made - that is, if `send_handshake` returns `true` - it will yield a `WebSocketConnection` to the `block` supplied, as shown in the example below. If `#send_handshake` returns `false`, the server will not create the `WebSocketConnection` instance and will just carry on listening for new requests.
+On calling `#accept`, our `WebSocketServer` will constantly be listening for incoming WebSocket requests. It will be responsible for validating incoming HTTP requests, and sending back a handshake.  If a handshake can and has been made - that is, if send_handshake returns true - it will return a new `WebSocketConnection`, as shown in the example below. 
 
 ```ruby
 class WebSocketServer
 
   ...
 
-  def connect(&block)
-    loop do
-      Thread.start(@tcp_server.accept) do |socket|
-        begin
-          send_handshake(socket) && yield(WebSocketConnection.new(socket))
-        rescue => e
-          puts e.backtrace
-        end
-      end
-    end
+  def accept
+    socket = @tcp_server.accept
+    send_handshake(socket) && WebSocketConnection.new(socket)
   end
 
 end
@@ -200,15 +194,17 @@ def send_handshake_response(socket, ws_accept)
 end
 ```
 
-Now that we've sent the handshake and returned `true`, a new `WebSocketConnection` will be yielded to the application thread. So, test it out!
+Now that we've sent the handshake and returned `true`, a new `WebSocketConnection` will be returned to our application. So, test it out! Let's create a `loop` that constantly listens for new requests. Using `Thread.new` and yielding the result of `server.accept` - which should be our new connection - we can handle concurrent requests.
 
 In your Ruby app, write this:
 
 ```ruby
 server = WebSocketServer.new(port: 3333, path: '/')
 
-server.connect do |connection|
-  puts "Connected"
+loop do
+  Thread.new(server.accept) do |connection|
+    puts "Connected"
+  end
 end
 ```
 
@@ -218,11 +214,7 @@ Run this app and while this code is running, open up your browser console and cr
 var socket = new WebSocket("ws://localhost:3333");
 ```
 
-<<<<<<< HEAD
-You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/s-from-scratch-tutorial/blob/master/websocket_server.rb#L25-L35).
-=======
-You should see that your server thread has yielded to the application thread upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial).
->>>>>>> b104c686e55443051ee8a3958126e164500e0aa0
+You should see that a `connection` has been made upon handshake, and printed `"Connected"` to your terminal window. If not, you can check out the source code [here](https://github.com/pusher/websockets-from-scratch-tutorial).
 
 ### Listening For Messages
 
@@ -231,11 +223,12 @@ Now that clients can connect to us and the user has access to the `WebSocketConn
 By the end of this section, here is what we want to have:
 
 ```ruby
-server.connect do  |connection|
-  puts "Connected"
-
-  connection.listen do |message|
-    puts message
+loop do
+  Thread.new(server.accept) do |connection|
+    puts "Connected"
+    while (message = connection.recv)
+      puts message
+    end
   end
 end
 ```
@@ -249,29 +242,20 @@ socket.send("hello");
 
 \- we should hope to see `"hello"` in our terminal window. Of course if you try this out now you'll get an error.
 
-So let's create `WebSocketConnection#listen` method. In it we will open a new thread that constantly listens to incoming messages on the connection's socket.
+So let's create `WebSocketConnection#recv` method. In it we will read from the socket if there are bytes available.
 
 ```ruby
 class WebSocketConnection
 
   ...
 
-  def listen(&block)
-    Thread.new do
-      loop do
-        begin
-          ...
-        rescue => e
-          puts e.backtrace
-        end
-      end
-    end
+  def recv
   end
 
 end
 ```
 
-As mentioned in the overview above, WebSocket messages are wrapped in frames, which are a sequence of bytes carrying information about the message. Our `#listen` method will parse the bytes of a frame and yield the message's content to the application thread.
+As mentioned in the overview above, WebSocket messages are wrapped in frames, which are a sequence of bytes carrying information about the message. Our `#recv` method will parse the bytes of a frame and yield the message's content to the application thread.
 
 Let's have a look at what we'll receive if, as in the example above, we send `"hello"` over the socket.
 
@@ -285,12 +269,8 @@ The first byte indicates whether this is the complete message. If the first bit 
 Using the `TCPSocket#read` method, we can read `n` bytes at a time:
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0] # get the 0th item of [129]
-    end
-  end
+def recv
+    fin_and_opcode = socket.read(1).bytes[0] # get the 0th item of [129]
 end
 ```
 
@@ -299,104 +279,83 @@ The second byte contains two pieces of information. Firstly, if the message is e
 The remainder of the byte indicates the content's length. Firstly, we need to remove the first bit out of the equation by subtracting 128 (or calling `mask_and_length_indicator & 0x7f`, if you are comfortable with bitwise operators - which I'm not).
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0]
-      mask_and_length_indicator = socket.read(1).bytes[0]
-      length_indicator = mask_and_length_indicator - 128
-    end
-  end
+def recv
+  fin_and_opcode = socket.read(1).bytes[0]
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 end
 ```
 
 If the result is smaller or equal to 125, that is the content length.
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1)
-      mask_and_length_indicator = socket.read(1).bytes
-      length_indicator = mask_and_length_indicator - 128
+def recv
+  fin_and_opcode = socket.read(1).bytes
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 
-      length =  if length_indicator <= 125
-                  length_indicator
-                  ...
-                end
-    end
-  end
+  length =  if length_indicator <= 125
+              length_indicator
+              ...
+            end
 end
 ```
 
 If the `length_indicator` is equal to 126, the next two bytes need to be parsed into a 16-bit unsigned integer to get the numeric value of the length. We do this by using Ruby's `Array#unpack` method, passing in `"n"` to show we want a 16-bit unsigned integer, [as per Ruby's documentation here](http://ruby-doc.org/core-2.2.0/Array.html#pack-method).
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0]
-      mask_and_length_indicator = socket.read(1).bytes[0]
-      length_indicator = mask_and_length_indicator - 128
+def recv
+  fin_and_opcode = socket.read(1).bytes
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 
-      length =  if length_indicator <= 125
-                  length_indicator
-                elsif length_indicator == 126
-                  socket.read(2).unpack("n")[0]
-                  ...
-                end
-    end
-  end
+  length =  if length_indicator <= 125
+              length_indicator
+            elsif length_indicator == 126
+              socket.read(2).unpack("n")[0]
+            ...
+            end
 end
 ```
 
 If the `length_indicator` is equal to 127, the next eight bytes will need to be parsed into a 64-bit unsigned integer to get the length. `"Q>"` is passed to `unpack` to indicate this.
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0]
-      mask_and_length_indicator = socket.read(1).bytes[0]
-      length_indicator = mask_and_length_indicator - 128
+def recv
+  fin_and_opcode = socket.read(1).bytes
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 
-      length =  if length_indicator <= 125
-                  length_indicator
-                elsif length_indicator == 126
-                  socket.read(2).unpack("n")[0]
-                else
-                  socket.read(8).unpack("Q>")[0]
-                end
-      ...
-    end
-  end
+  length =  if length_indicator <= 125
+              length_indicator
+            elsif length_indicator == 126
+              socket.read(2).unpack("n")[0]
+            else
+              socket.read(8).unpack("Q>")[0]
+            end
+  ...
 end
 ```
 
 The mask-key itself - what we use to decode the content - will be the next 4 bytes. Then, the encoded content will be the next `nth` bytes, where `n` is the content-length we extracted.
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0]
-      mask_and_length_indicator = socket.read(1).bytes[0]
-      length_indicator = mask_and_length_indicator - 128
+def recv
+  fin_and_opcode = socket.read(1).bytes
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 
-      length =  if length_indicator <= 125
-                  length_indicator
-                elsif length_indicator == 126
-                  socket.read(2).unpack("n")[0]
-                else
-                  socket.read(8).unpack("Q>")[0]
-                end
+  length =  if length_indicator <= 125
+              length_indicator
+            elsif length_indicator == 126
+              socket.read(2).unpack("n")[0]
+            else
+              socket.read(8).unpack("Q>")[0]
+            end
 
-      keys = socket.read(4).bytes
-      encoded = socket.read(length).bytes
-
-      ...
-    end
-  end
+  keys = socket.read(4).bytes
+  encoded = socket.read(length).bytes
+  ...
 end
 ```
 
@@ -404,64 +363,53 @@ Let's again use the mask-key to decode the content by using this magic function 
 
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0]
-      mask_and_length_indicator = socket.read(1).bytes[0]
-      length_indicator = mask_and_length_indicator - 128
+def recv
+  fin_and_opcode = socket.read(1).bytes
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 
-      length =  if length_indicator <= 125
-                  length_indicator
-                elsif length_indicator == 126
-                  socket.read(2).unpack("n")[0]
-                else
-                  socket.read(8).unpack("Q>")[0]
-                end
+  length =  if length_indicator <= 125
+              length_indicator
+            elsif length_indicator == 126
+              socket.read(2).unpack("n")[0]
+            else
+              socket.read(8).unpack("Q>")[0]
+            end
 
-      keys = socket.read(4).bytes
-      encoded = socket.read(length).bytes
+  keys = socket.read(4).bytes
+  encoded = socket.read(length).bytes
 
-      decoded = encoded.each_with_index.map do |byte, index|
-        byte ^ keys[index % 4]
-      end
-
-      ...
-    end
+  decoded = encoded.each_with_index.map do |byte, index|
+    byte ^ keys[index % 4]
   end
+  ...
 end
 ```
 
-Now that we have the decoded content of the message, let's turn it into a string and yield it to the application thread:
+Now that we have the decoded content of the message, let's turn it into a string and return it:
 
 ```ruby
-def listen(&block)
-  Thread.new do
-    loop do
-      fin_and_opcode = socket.read(1).bytes[0]
-      mask_and_length_indicator = socket.read(1).bytes[0]
-      length_indicator = mask_and_length_indicator - 128
+def recv
+  fin_and_opcode = socket.read(1).bytes
+  mask_and_length_indicator = socket.read(1).bytes[0]
+  length_indicator = mask_and_length_indicator - 128
 
-      length =  if length_indicator <= 125
-                  length_indicator
-                elsif length_indicator == 126
-                  socket.read(2).unpack("n")[0]
-                else
-                  socket.read(8).unpack("Q>")[0]
-                end
+  length =  if length_indicator <= 125
+              length_indicator
+            elsif length_indicator == 126
+              socket.read(2).unpack("n")[0]
+            else
+              socket.read(8).unpack("Q>")[0]
+            end
 
-      keys = socket.read(4).bytes
-      encoded = socket.read(length).bytes
+  keys = socket.read(4).bytes
+  encoded = socket.read(length).bytes
 
-      decoded = encoded.each_with_index.map do |byte, index|
-        byte ^ keys[index % 4]
-      end
-
-      message = decoded.pack("c*") # "c*" turns the byte array into a string
-
-      yield(message)
-    end
+  decoded = encoded.each_with_index.map do |byte, index|
+    byte ^ keys[index % 4]
   end
+
+  decoded.pack("c*")
 end
 ```
 
@@ -555,22 +503,23 @@ end
 Now that we can begin connections, send messages and receive messages, we can write our tiny echo-server application.
 
 ```ruby
-server = WebSocketServer.new(port: 3333, path: '/')
+server = WebsocketServer.new
 
-server.connect do |connection|
-  puts "Connected"
-  connection.listen do |message|
-    puts "Received #{message} from the browser"
-    connection.send("Received #{message}. Thanks!")
+loop do
+  Thread.new(server.accept) do |connection|
+    puts "Connected"
+    while (message = connection.recv)
+      puts "Received #{message}"
+      connection.send("Received #{message}. Thanks!")
+    end
   end
-
 end
 ```
 
 Run this server, and then go into your browser console. Then type:
 
 ```js
-var socket = new WebSocket("ws://localhost:3333");
+var socket = new WebSocket("ws://localhost:4567");
 
 socket.onmessage = function(event){console.log(event.data);};
 ```
