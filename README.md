@@ -187,9 +187,9 @@ def send_handshake(socket)
 end
 
 def send_handshake_response(socket, ws_accept)
-  socket << "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
+  socket << "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
             "Sec-WebSocket-Accept: #{ws_accept}\r\n"
 end
 ```
