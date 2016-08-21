@@ -178,7 +178,7 @@ def send_handshake(socket)
   request_line = socket.gets
   header = get_header(socket)
   if (request_line =~ /GET #{@path} HTTP\/1.1/) && (header =~ /Sec-WebSocket-Key: (.*)\r\n/)
-    ws_accept = create__accept($1)
+    ws_accept = create_websocket_accept($1)
     send_handshake_response(socket, ws_accept)
     return true
   end
